@@ -1,0 +1,11 @@
+1	Au Small Finance Bank Ltd.
+2	Capital Small Finance Bank Ltd
+3	Equitas Small Finance Bank Ltd
+4	ESAF Small Finance Bank Ltd.
+5	Suryoday Small Finance Bank Ltd.
+6	Ujjivan Small Finance Bank Ltd.
+7	Utkarsh Small Finance Bank Ltd.
+8	slice Small Finance Bank Ltd.
+9	Jana Small Finance Bank Ltd
+10	Shivalik Small Finance Bank Ltd
+11	Unity Small Finance Bank Ltd
