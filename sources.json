@@ -1,0 +1,137 @@
+{
+  "sources": [
+    {
+      "id": "kotak_nro",
+      "bank_name": "Kotak Mahindra Bank (NRO TD)",
+      "url": "https://www.kotak.bank.in/bank/mailers/intrates/get_all_variable_data_latest2.php?section=NRO_Term_Deposit&_=1774463905244",
+      "parser": "kotak_json_array",
+      "description": "Kotak variable JSON: rows are [min_days, max_days, general_%, senior_%]"
+    },
+    {
+      "id": "sbi_retail_td",
+      "bank_name": "State Bank of India (retail domestic TD)",
+      "url": "https://sbi.bank.in/web/interest-rates/deposit-rates/retail-domestic-term-deposits",
+      "parser": "html_sbi_style",
+      "description": "HTML page with a table whose header contains Tenors"
+    },
+    {
+      "id": "hdfc_lt3cr_fd",
+      "bank_name": "HDFC Bank (domestic / NRO / NRE FD, < ₹3 Cr)",
+      "url": "https://www.hdfc.bank.in/interest-rates",
+      "parser": "html_div_two_rate_columns",
+      "container_id": "IR-less-than-3-cr",
+      "description": "Table inside #IR-less-than-3-cr (general + senior citizen rates)"
+    },
+    {
+      "id": "icici_fd_lt3cr",
+      "bank_name": "ICICI Bank (FD rates from JSON)",
+      "url": "https://www.icici.bank.in/content/dam/icicibank-revamp/deposits/fixed-deposits/json/fd-interest-rate.json",
+      "parser": "icici_fd_interest_json",
+      "description": "ICICI JSON interestData[0] using c1=general and c2=senior rates"
+    },
+    {
+      "id": "bob_fd_lt3cr_callable",
+      "bank_name": "Bank of Baroda (callable FD, domestic/NRO < ₹3 Cr)",
+      "url": "https://bankofbaroda.bank.in/interest-rate-and-service-charges/deposits-interest-rates/fixed-deposits-callable-and-non-callable-upto-ten-crores",
+      "parser": "html_div_class_fd_table",
+      "container_class": "fdlandingdata",
+      "description": "First table in div.fdlandingdata: general + Sr. Citizen (Super Sr. column ignored for compare)"
+    },
+    {
+      "id": "idfc_fd_lt3cr",
+      "bank_name": "IDFC FIRST Bank (FD < ₹3 Cr)",
+      "url": "https://www.idfcfirst.bank.in/personal-banking/deposits/fixed-deposit/fd-interest-rates",
+      "parser": "idfc_fd_formtable",
+      "senior_extra_pct": 0.5,
+      "description": "First table.test.formtable: published rate + 0.50% for senior (per site); set senior_extra_pct to null to store general only"
+    },
+    {
+      "id": "union_bank_domestic_nro_lt3cr",
+      "bank_name": "Union Bank of India (Domestic / NRO TD < ₹3 Cr)",
+      "url": "https://www.unionbankofindia.bank.in/en/details/rate-of-interest",
+      "parser": "union_bank_inner_table",
+      "senior_extra_pct": 0.5,
+      "description": "First div.inner-table: revised rate for < ₹3 Cr; senior = general + 0.50% (per site)"
+    },
+    {
+      "id": "pnb_domestic_td_lt3cr",
+      "bank_name": "Punjab National Bank (Domestic TD < ₹3 Cr)",
+      "url": "https://pnb.bank.in/Interest-Rates-Deposit.html",
+      "parser": "pnb_anchor_below_table",
+      "anchor_data_tab": "fa-tab132",
+      "description": "Table below the Domestic term deposits (< Rs. 3 crore) accordion anchor (data-tab=fa-tab132)"
+    },
+    {
+      "id": "canara_domestic_nro_lt3cr",
+      "bank_name": "Canara Bank (Domestic/NRO TD < ₹3 Cr)",
+      "url": "https://www.canarabank.bank.in/pages/deposit-interest-rates",
+      "parser": "canara_msonormal_following_table",
+      "description": "Table below p.MsoNormal heading for Term Deposits (< Rs. 3 crore)"
+    },
+    {
+      "id": "au_fd_first_table",
+      "bank_name": "AU Small Finance Bank (Fixed Deposit)",
+      "url": "https://www.au.bank.in/interest-rates/fixed-deposit-interest-rates",
+      "parser": "au_first_table",
+      "local_html_path": "snapshots/au_fd_interest_rates.html",
+      "description": "First table on AU fixed deposit interest rates page; falls back to local_html_path when live fetch is blocked"
+    },
+    {
+      "id": "federal_resident_td_first_table",
+      "bank_name": "Federal Bank (Resident Term Deposit)",
+      "url": "https://www.federal.bank.in/deposit-rate",
+      "parser": "federal_first_table",
+      "description": "First table on Federal Bank deposit-rate page (resident term deposit rates)"
+    },
+    {
+      "id": "indusind_fd_lt3cr_first_table",
+      "bank_name": "IndusInd Bank (FD < ₹3 Cr)",
+      "url": "https://www.indusind.bank.in/in/en/personal/rates.html",
+      "parser": "indusind_first_table",
+      "description": "First table on IndusInd rates page (FD < ₹3 Cr)"
+    },
+    {
+      "id": "ujjivan_first_table",
+      "bank_name": "Ujjivan Small Finance Bank (Platina FD first table)",
+      "url": "https://www.ujjivansfb.bank.in/support-interest-rates",
+      "parser": "ujjivan_first_table",
+      "description": "First table on Ujjivan support-interest-rates page"
+    },
+    {
+      "id": "equitas_overall_interest_pdf",
+      "bank_name": "Equitas Small Finance Bank (Overall Interest Rates)",
+      "url": "https://equitas.bank.in/personal-banking/save/fixed-deposits/fixed-deposit/",
+      "parser": "equitas_div_w_full_md_w_3_5",
+      "local_html_path": "snapshots/equitas_fd_page.html",
+      "description": "Equitas FD page table inside div.w-full.md:w-3/5; uses local_html_path if live page is blocked"
+    },
+    {
+      "id": "bandhan_second_rctable_3cr_10cr",
+      "bank_name": "Bandhan Bank (Bulk Deposit ₹3 cr to ₹10 cr)",
+      "url": "https://bandhan.bank.in/rates-charges",
+      "parser": "bandhan_second_rctable_3cr_10cr",
+      "description": "Second div.rctable, only column ₹3 cr to ₹10 cr"
+    },
+    {
+      "id": "idbi_termdeposit_section_table",
+      "bank_name": "IDBI Bank (Term Deposit section)",
+      "url": "https://www.idbi.bank.in/interest-rates.aspx#InterestRate-TermDeposit",
+      "parser": "idbi_interestrate_termdeposit_section",
+      "description": "Table inside section id=InterestRate-TermDeposit"
+    },
+    {
+      "id": "indianbank_first_table",
+      "bank_name": "Indian Bank (Deposit Rates first table)",
+      "url": "https://indianbank.bank.in/departments/deposit-rates/",
+      "parser": "indianbank_first_table",
+      "description": "First table on Indian Bank deposit rates page"
+    },
+    {
+      "id": "rbl_collapse584_table",
+      "bank_name": "RBL Bank (FD < INR 3 Cr, collapse584)",
+      "url": "https://www.rbl.bank.in/interest-rates",
+      "parser": "rbl_collapse584_table",
+      "description": "Table inside div id=collapse584"
+    }
+  ]
+}
