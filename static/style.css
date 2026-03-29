@@ -21,7 +21,7 @@
   --surface: #ffffff;
   --surface-2: #f7faff;
   --text: #14233d;
-  --muted: #5f7395;
+  --muted: #3d4e6d;
   --accent: #2c6cff;
   --accent-2: #4b81ff;
   --border: #d4deef;
@@ -154,37 +154,6 @@ code {
   background: rgba(255, 91, 91, 0.12);
 }
 
-.source-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: 0.55rem;
-}
-
-.source-list li {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.55rem 0.85rem;
-  padding: 0.55rem 0.7rem;
-  border-radius: 10px;
-  border: 1px solid rgba(140, 165, 210, 0.18);
-  background: rgba(255, 255, 255, 0.02);
-}
-
-.source-list .meta {
-  color: var(--muted);
-  font-size: 0.8rem;
-  background: rgba(140, 170, 220, 0.12);
-  border: 1px solid rgba(140, 170, 220, 0.2);
-  border-radius: 999px;
-  padding: 0.05rem 0.55rem;
-}
-
-.empty {
-  color: var(--muted);
-}
 
 .table-wrap {
   margin-bottom: 1.2rem;
@@ -236,6 +205,10 @@ code {
   background: #111b2f;
 }
 
+[data-theme="light"] .segmented {
+  background: #eef2fd;
+}
+
 .seg-btn {
   font: inherit;
   cursor: pointer;
@@ -254,6 +227,10 @@ code {
 
 .seg-btn:hover {
   background: #223150;
+}
+
+[data-theme="light"] .seg-btn:hover {
+  background: #dce6ff;
 }
 
 .seg-btn.active {
@@ -280,6 +257,10 @@ code {
   border: 1px solid rgba(140, 165, 210, 0.2);
   border-radius: 999px;
   padding: 0.2rem 0.6rem;
+}
+
+[data-theme="light"] .bank-filter-item {
+  background: rgba(0, 0, 0, 0.04);
 }
 
 .bank-filter-item input {
@@ -367,7 +348,7 @@ table.rates {
 [data-theme="light"] .rates thead th,
 [data-theme="light"] .rates thead tr.thead-main th.corner,
 [data-theme="light"] .rates thead tr.thead-main th.sticky-top.bank-head {
-  background: #eef4ff;
+  background: #e6efff;
 }
 
 .rates th.sticky-col,
@@ -382,7 +363,7 @@ table.rates {
 
 [data-theme="light"] .rates th.sticky-col,
 [data-theme="light"] .rates th.tenor {
-  background: #f7faff;
+  background: #eff5ff;
 }
 
 .rates tbody tr:nth-child(odd) td {

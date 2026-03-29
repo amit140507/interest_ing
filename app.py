@@ -8,7 +8,7 @@ import sqlite3
 from flask import Flask, jsonify, render_template, request
 
 from config import DATABASE_PATH, SOURCES_PATH
-from scrapers import init_db, refresh_source
+from scrapers import init_db, refresh_source, upsert_bank
 
 app = Flask(__name__)
 
@@ -44,6 +44,19 @@ def load_sources() -> list[dict]:
     with open(SOURCES_PATH, encoding="utf-8") as f:
         data = json.load(f)
     return list(data.get("sources") or [])
+
+
+def sync_banks_from_sources(conn: sqlite3.Connection, sources: list[dict]) -> None:
+    """
+    Ensure every configured source appears as a bank entry even before scraping,
+    so newly-added banks can be shown instantly in the UI.
+    """
+    for src in sources:
+        sid = str(src.get("id") or "").strip()
+        if not sid:
+            continue
+        name = str(src.get("bank_name") or sid).strip()
+        upsert_bank(conn, sid, name)
 
 
 def _shortest_tenor_label(labels: list[str]) -> str | None:
@@ -104,7 +117,7 @@ def build_comparison(conn: sqlite3.Connection) -> dict:
         SELECT b.id, b.source_id, b.display_name,
                (SELECT MAX(fetched_at) FROM fd_rates WHERE bank_id = b.id) AS fetched_at
         FROM banks b
-        INNER JOIN fd_rates r ON r.bank_id = b.id
+        LEFT JOIN fd_rates r ON r.bank_id = b.id
         GROUP BY b.id
         ORDER BY b.display_name
         """
@@ -169,18 +182,22 @@ def build_comparison(conn: sqlite3.Connection) -> dict:
 
 @app.route("/")
 def index():
+    sources = load_sources()
     conn = get_conn()
     try:
+        sync_banks_from_sources(conn, sources)
         data = build_comparison(conn)
     finally:
         conn.close()
-    return render_template("index.html", comparison=data, sources=load_sources())
+    return render_template("index.html", comparison=data, sources=sources)
 
 
 @app.route("/api/comparison")
 def api_comparison():
+    sources = load_sources()
     conn = get_conn()
     try:
+        sync_banks_from_sources(conn, sources)
         return jsonify(build_comparison(conn))
     finally:
         conn.close()

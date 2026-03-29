@@ -9,7 +9,7 @@
 <body>
   <header class="page-header">
     <h1>Fixed deposit rate comparison</h1>
-    <p class="lede">Rates are loaded from URLs listed in <code>sources.json</code>, stored locally, and compared below. Use filters to narrow tenors and banks.</p>
+    <p class="lede">Compare fixed deposit rates across different banks and tenors. Use filters to narrow down your search.</p>
   </header>
 
   <section class="panel actions">
@@ -18,20 +18,6 @@
     <span id="status" class="status" aria-live="polite"></span>
   </section>
 
-  <section class="panel">
-    <h2>Configured sources</h2>
-    <ul class="source-list">
-      {% for s in sources %}
-      <li>
-        <strong>{{ s.bank_name or s.id }}</strong>
-        <span class="meta">{{ s.parser }}</span>
-        <button type="button" class="btn small js-refresh-one" data-source-id="{{ s.id }}">Refresh</button>
-      </li>
-      {% else %}
-      <li class="empty">No sources in <code>sources.json</code>. Add a bank entry with <code>url</code> and <code>parser</code>.</li>
-      {% endfor %}
-    </ul>
-  </section>
 
   <section class="panel table-wrap">
     <h2>Comparison</h2>
@@ -158,27 +144,6 @@
       }
     });
 
-    document.querySelectorAll('.js-refresh-one').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        const id = btn.getAttribute('data-source-id');
-        setStatus('Refreshing ' + id + '…');
-        setButtonBusy(btn, true, 'Refreshing…');
-        try {
-          const data = await postRefresh(id);
-          const r = (data.results || [])[0];
-          if (r && r.ok) {
-            setStatus(`${id}: ${r.count} rows`);
-            location.reload();
-          } else if (r) {
-            setStatus(`${id}: ${r.error}`, true);
-          }
-        } catch (e) {
-          setStatus(String(e.message || e), true);
-        } finally {
-          setButtonBusy(btn, false);
-        }
-      });
-    });
   </script>
 </body>
 </html>

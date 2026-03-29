@@ -132,6 +132,42 @@
       "url": "https://www.rbl.bank.in/interest-rates",
       "parser": "rbl_collapse584_table",
       "description": "Table inside div id=collapse584"
+    },
+    {
+      "id": "cityunion_second_customers_1",
+      "bank_name": "City Union Bank (Domestic/NRO Callable TD)",
+      "url": "https://cityunionbank.bank.in/deposit-interest-rate",
+      "parser": "cityunion_second_customers_1",
+      "description": "Second table with id=customers-1 on deposit-interest-rate page"
+    },
+    {
+      "id": "dcb_depositrates_block",
+      "bank_name": "DCB Bank (Fixed Deposit Rates)",
+      "url": "https://www.dcb.bank.in/rates/fixed-deposit-interest-rate",
+      "parser": "dcb_depositrates_block",
+      "description": "First table inside div id=DepositRates_datatable-block__qGF_p"
+    },
+    {
+      "id": "dhan_parent_accordion_domestic_nro",
+      "bank_name": "Dhanlaxmi Bank (Domestic/NRO Term Deposits < ₹3 Cr)",
+      "url": "https://www.dhan.bank.in/interest-rates/",
+      "parser": "dhan_parent_accordion_domestic_nro",
+      "description": "First table inside div.parent_accordion.term-deposits-domestic-nro-deposits"
+    },
+    {
+      "id": "yes_first_table",
+      "bank_name": "YES Bank (Fixed Deposit first table)",
+      "url": "https://www.yes.bank.in/personal-banking/yes-individual/deposits/fixed-deposit",
+      "parser": "yes_first_table",
+      "description": "First table on YES Bank fixed-deposit page"
+    },
+    {
+      "id": "csb_domestic_deposits",
+      "bank_name": "CSB Bank (Domestic Term Deposits)",
+      "url": "https://www.csb.bank.in/interest-rates",
+      "parser": "csb_domestic_deposits",
+      "container_id": "domestic_deposites",
+      "description": "Domestic term deposit table under section id=domestic_deposites"
     }
   ]
 }
