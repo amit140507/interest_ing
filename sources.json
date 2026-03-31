@@ -92,10 +92,10 @@
     },
     {
       "id": "ujjivan_first_table",
-      "bank_name": "Ujjivan Small Finance Bank (Platina FD first table)",
+      "bank_name": "Ujjivan Small Finance Bank (Platina FD tabthree table)",
       "url": "https://www.ujjivansfb.bank.in/support-interest-rates",
       "parser": "ujjivan_first_table",
-      "description": "First table on Ujjivan support-interest-rates page"
+      "description": "Table inside div id=tabthree on Ujjivan support-interest-rates page"
     },
     {
       "id": "equitas_overall_interest_pdf",
@@ -145,7 +145,7 @@
       "bank_name": "DCB Bank (Fixed Deposit Rates)",
       "url": "https://www.dcb.bank.in/rates/fixed-deposit-interest-rate",
       "parser": "dcb_depositrates_block",
-      "description": "First table inside div id=DepositRates_datatable-block__qGF_p"
+      "description": "First table inside div class=DepositRates_datatable-block__qGF_p"
     },
     {
       "id": "dhan_parent_accordion_domestic_nro",
@@ -159,7 +159,8 @@
       "bank_name": "YES Bank (Fixed Deposit first table)",
       "url": "https://www.yes.bank.in/personal-banking/yes-individual/deposits/fixed-deposit",
       "parser": "yes_first_table",
-      "description": "First table on YES Bank fixed-deposit page"
+      "local_html_path": "snapshots/yes_fd_page.html",
+      "description": "First table on YES Bank fixed-deposit page; uses local_html_path when live page is JS-rendered or blocked"
     },
     {
       "id": "csb_domestic_deposits",
@@ -167,7 +168,8 @@
       "url": "https://www.csb.bank.in/interest-rates",
       "parser": "csb_domestic_deposits",
       "container_id": "domestic_deposites",
-      "description": "Domestic term deposit table under section id=domestic_deposites"
+      "local_html_path": "snapshots/csb_interest_rates.html",
+      "description": "Domestic term deposit table under section id=domestic_deposites; falls back to local_html_path when live fetch is blocked"
     }
   ]
 }

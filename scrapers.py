@@ -38,16 +38,33 @@ def parse_tenor_to_days(tenor_text: str) -> tuple[int | None, int | None]:
 
     def parse_side(side: str) -> int | None:
         side = side.strip()
-        m = re.search(r"(\d+)\s*days?", side)
+        m = re.search(r"(\d+)\s*years?\s*(\d+)\s*months?\s*(\d+)\s*days?", side)
         if m:
-            return days_from(m)
-        m = re.search(r"(\d+)\s*months?", side)
+            return int(m.group(1)) * 365 + int(m.group(2)) * 30 + int(m.group(3))
+        m = re.search(r"(\d+)\s*years?\s*(\d+)\s*days?", side)
         if m:
-            return months_from(m)
+            return int(m.group(1)) * 365 + int(m.group(2))
+        m = re.search(r"(\d+)\s*months?\s*(\d+)\s*days?", side)
+        if m:
+            return int(m.group(1)) * 30 + int(m.group(2))
         m = re.search(r"(\d+)\s*years?", side)
         if m:
             return years_from(m)
+        m = re.search(r"(\d+)\s*months?", side)
+        if m:
+            return months_from(m)
+        m = re.search(r"(\d+)\s*days?", side)
+        if m:
+            return days_from(m)
         return None
+
+    m = re.search(r"^\s*(\d+)\s*-\s*(\d+)\s*(days?|months?|years?)\s*$", t)
+    if m:
+        a = int(m.group(1))
+        b = int(m.group(2))
+        unit = m.group(3)
+        mult = 1 if "day" in unit else (30 if "month" in unit else 365)
+        return min(a, b) * mult, max(a, b) * mult
 
     if " to " in t:
         left, right = t.split(" to ", 1)
@@ -409,6 +426,7 @@ def _looks_like_challenge_page(text: str) -> bool:
         "captcha",
         "cf-challenge",
         "cloudflare",
+        "just a moment",
         "attention required",
         "request rejected",
         "radware",
@@ -816,6 +834,13 @@ def parse_au_first_table(html: str) -> list[dict[str, Any]]:
     if not table:
         raise ValueError("No table found on AU FD rates page")
 
+    # Guard against the placeholder snapshot template so AU failures are explicit.
+    if "replace this template with a real au fixed-deposit page html snapshot" in html.lower():
+        raise ValueError(
+            "AU source fallback snapshot is still a template. "
+            "Replace snapshots/au_fd_interest_rates.html with real AU page HTML."
+        )
+
     out: list[dict[str, Any]] = []
     for tr in table.find_all("tr"):
         cells = tr.find_all(["td", "th"])
@@ -856,6 +881,10 @@ def parse_au_first_table(html: str) -> list[dict[str, Any]]:
                 "rate_general": gen,
                 "rate_senior": sr,
             }
+        )
+    if not out:
+        raise ValueError(
+            "AU parser found no rows. Live page is likely blocked and local snapshot is missing/invalid."
         )
     return out
 
@@ -987,14 +1016,28 @@ def parse_indusind_first_table(html: str) -> list[dict[str, Any]]:
 
 def parse_ujjivan_first_table(html: str) -> list[dict[str, Any]]:
     """
-    Ujjivan support-interest-rates page: parse second table
+    Ujjivan support-interest-rates page: parse table inside div#tabthree
     (Domestic Fixed Deposits and Sampoorna Nidhi).
     """
     soup = BeautifulSoup(html, "html.parser")
-    tables = soup.find_all("table")
-    table = tables[1] if len(tables) > 1 else None
+    root = soup.find("div", id="tabthree")
+    if not root:
+        raise ValueError("div#tabthree not found on Ujjivan interest-rates page")
+    table = root.find("table")
     if not table:
-        raise ValueError("Second table not found on Ujjivan interest-rates page")
+        raise ValueError("No table found inside div#tabthree on Ujjivan interest-rates page")
+
+    senior_extra: float | None = None
+    for tr in table.find_all("tr"):
+        cells = tr.find_all(["td", "th"])
+        if len(cells) < 2:
+            continue
+        first = cells[0].get_text(" ", strip=True).replace("\xa0", " ").strip().lower()
+        if "additional interest rate for senior citizens" in first:
+            v = _rate_from_cell_text(cells[1].get_text(" ", strip=True))
+            if v is not None:
+                senior_extra = v
+            break
 
     out: list[dict[str, Any]] = []
     for tr in table.find_all("tr"):
@@ -1007,16 +1050,29 @@ def parse_ujjivan_first_table(html: str) -> list[dict[str, Any]]:
         tl = tenor.lower()
         if "tenure" in tl or "interest rate" in tl:
             continue
+        if "additional interest rate for senior citizens" in tl:
+            continue
 
-        mn, mx = parse_tenor_to_days(tenor)
+        # Ujjivan uses patterns like "24 months 1 day to 990 days" and
+        # "12 months to < 24 months"; parse these before generic fallback.
+        mn, mx = None, None
+        m = re.search(r"(\d+)\s*months?\s*1\s*day\s*to\s*(\d+)\s*days?", tl)
+        if m:
+            mn, mx = int(m.group(1)) * 30 + 1, int(m.group(2))
+        if mn is None:
+            m = re.search(r"(\d+)\s*months?\s*1\s*day\s*to\s*(\d+)\s*months?", tl)
+            if m:
+                mn, mx = int(m.group(1)) * 30 + 1, int(m.group(2)) * 30
+        if mn is None:
+            m = re.search(r"(\d+)\s*days?\s*to\s*(\d+)\s*months?", tl)
+            if m:
+                mn, mx = int(m.group(1)), int(m.group(2)) * 30
         if mn is None:
             m = re.search(r"(\d+)\s*months?\s*to\s*<\s*(\d+)\s*months?", tl)
             if m:
                 mn, mx = int(m.group(1)) * 30, int(m.group(2)) * 30 - 1
         if mn is None:
-            m = re.search(r"(\d+)\s*months?\s*(\d+)\s*day\s*to\s*(\d+)\s*days?", tl)
-            if m:
-                mn, mx = int(m.group(1)) * 30 + int(m.group(2)), int(m.group(3))
+            mn, mx = parse_tenor_to_days(tenor)
         if mn is None:
             continue
         if mx is None:
@@ -1025,6 +1081,7 @@ def parse_ujjivan_first_table(html: str) -> list[dict[str, Any]]:
         rate = _rate_from_cell_text(cells[1].get_text(" ", strip=True))
         if rate is None:
             continue
+        sr = round(rate + senior_extra, 4) if senior_extra is not None else None
 
         out.append(
             {
@@ -1032,7 +1089,7 @@ def parse_ujjivan_first_table(html: str) -> list[dict[str, Any]]:
                 "max_days": mx,
                 "tenor_label": tenor,
                 "rate_general": rate,
-                "rate_senior": None,
+                "rate_senior": sr,
             }
         )
     return out
@@ -1059,15 +1116,21 @@ def parse_equitas_overall_interest_pdf(raw_pdf: bytes) -> list[dict[str, Any]]:
         # Keep rows that look like tenure + trailing percent/rate.
         if not re.search(r"(\d+\s*(?:days?|months?|years?))", low):
             continue
-        m_rate = re.search(r"(\d+(?:\.\d+)?)\s*%?\s*$", ln)
-        if not m_rate:
+        m_rates = re.findall(r"(\d+(?:\.\d+)?)\s*%", ln)
+        if not m_rates:
             continue
-        rate = float(m_rate.group(1))
-        tenor = ln[: m_rate.start()].strip(" -:\t")
+        # Prefer first percentage in line (deposit rate), later ones are often effective yield.
+        rate = float(m_rates[0])
+        m_first = re.search(r"(\d+(?:\.\d+)?)\s*%", ln)
+        tenor = ln[: m_first.start()].strip(" -:\t") if m_first else ""
         if not tenor:
             continue
 
-        mn, mx = parse_tenor_to_days(tenor)
+        m = re.search(r"(\d+)\s*years?\s*1\s*day\s*(\d+)\s*days?", low)
+        if m:
+            mn, mx = int(m.group(1)) * 365 + 1, int(m.group(2))
+        else:
+            mn, mx = parse_tenor_to_days(tenor)
         if mn is None:
             m = re.search(r"(\d+)\s*months?\s*to\s*<\s*(\d+)\s*months?", low)
             if m:
@@ -1093,23 +1156,57 @@ def parse_equitas_overall_interest_pdf(raw_pdf: bytes) -> list[dict[str, Any]]:
     return out
 
 
+def _extract_equitas_overall_interest_pdf_url(html: str) -> str | None:
+    t = html or ""
+    # Prefer the explicit "Overall_Interest_Rates" PDF if present.
+    m = re.search(
+        r"https?://[^\s\"'<>]*overall[_-]?interest[_-]?rates[^\s\"'<>]*\.pdf",
+        t,
+        flags=re.I,
+    )
+    if m:
+        return m.group(0)
+    # Fallback: any PDF URL on page that looks interest/rate related.
+    for u in re.findall(r"https?://[^\s\"'<>]+\.pdf", t, flags=re.I):
+        ul = u.lower()
+        if "interest" in ul and "rate" in ul:
+            return u
+    return None
+
+
 def parse_equitas_div_w_full_md_w_3_5(html: str) -> list[dict[str, Any]]:
     """
     Equitas FD page: parse table inside div with classes 'w-full' and 'md:w-3/5'.
     """
+    # Guard against placeholder snapshot templates.
+    if "replace this template with actual page html from" in html.lower():
+        raise ValueError(
+            "Equitas source fallback snapshot is still a template. "
+            "Replace snapshots/equitas_fd_page.html with real Equitas page HTML."
+        )
+
     soup = BeautifulSoup(html, "html.parser")
+    # Legacy selector first (older Equitas markup).
     root = None
     for d in soup.find_all("div"):
         cls = _split_html_classes(d.get("class"))
         if "w-full" in cls and "md:w-3/5" in cls:
             root = d
             break
-    if not root:
-        raise ValueError("No div with classes 'w-full' and 'md:w-3/5' found")
 
-    table = root.find("table")
-    if not table:
-        raise ValueError("No table found inside Equitas target div")
+    table = root.find("table") if root else None
+    if table is None:
+        # Fallback: pick first table that looks like an FD rates table.
+        for t in soup.find_all("table"):
+            txt = t.get_text(" ", strip=True).lower()
+            if (
+                ("tenure" in txt or "maturity" in txt or "period" in txt)
+                and ("rate" in txt or "interest" in txt)
+            ):
+                table = t
+                break
+    if table is None:
+        raise ValueError("No rates table found in Equitas snapshot/page HTML")
 
     out: list[dict[str, Any]] = []
     for tr in table.find_all("tr"):
@@ -1151,6 +1248,10 @@ def parse_equitas_div_w_full_md_w_3_5(html: str) -> list[dict[str, Any]]:
                 "rate_general": gen,
                 "rate_senior": sr,
             }
+        )
+    if not out:
+        raise ValueError(
+            "Equitas parser found no rows. Live page is likely blocked and local snapshot is missing/invalid."
         )
     return out
 
@@ -1251,6 +1352,63 @@ def parse_idbi_interestrate_termdeposit_section(html: str) -> list[dict[str, Any
     if not table:
         raise ValueError("No table inside #InterestRate-TermDeposit")
 
+    def _parse_idbi_tenor_days(tenor_text: str) -> tuple[int | None, int | None]:
+        # Remove parenthetical notes like "(except 555 days & 700 Days)".
+        clean = re.sub(r"\([^)]*\)", "", tenor_text).replace("\xa0", " ").strip()
+        tl = re.sub(r"\s+", " ", clean.lower())
+
+        # 07-30 days / 46- 60 days
+        m = re.search(r"\b(\d+)\s*-\s*(\d+)\s*days?\b", tl)
+        if m:
+            a, b = int(m.group(1)), int(m.group(2))
+            return min(a, b), max(a, b)
+
+        # 6 months 1 day to 270 days
+        m = re.search(r"\b(\d+)\s*months?\s*(\d+)\s*days?\s*to\s*(\d+)\s*days?\b", tl)
+        if m:
+            a = int(m.group(1)) * 30 + int(m.group(2))
+            b = int(m.group(3))
+            return min(a, b), max(a, b)
+
+        # 91 days to 6 months
+        m = re.search(r"\b(\d+)\s*days?\s*to\s*(\d+)\s*months?\b", tl)
+        if m:
+            a, b = int(m.group(1)), int(m.group(2)) * 30
+            return min(a, b), max(a, b)
+
+        # 271 days to < 1 year
+        m = re.search(r"\b(\d+)\s*days?\s*to\s*<?\s*(\d+)\s*year", tl)
+        if m:
+            a, b = int(m.group(1)), int(m.group(2)) * 365 - 1
+            return min(a, b), max(a, b)
+
+        # >1 Year to 2 Years
+        m = re.search(r">\s*(\d+)\s*year\s*to\s*(\d+)\s*years?", tl)
+        if m:
+            a, b = int(m.group(1)) * 365 + 1, int(m.group(2)) * 365
+            return min(a, b), max(a, b)
+
+        # 3 years to <5 years
+        m = re.search(r"\b(\d+)\s*years?\s*to\s*<?\s*(\d+)\s*years?", tl)
+        if m:
+            a = int(m.group(1)) * 365
+            b = int(m.group(2)) * 365 - (1 if "<" in tl else 0)
+            return min(a, b), max(a, b)
+
+        # 5 years
+        m = re.search(r"\b(\d+)\s*years?\b", tl)
+        if m:
+            d = int(m.group(1)) * 365
+            return d, d
+
+        # 370 days / 1111 days
+        m = re.search(r"\b(\d+)\s*days?\b", tl)
+        if m:
+            d = int(m.group(1))
+            return d, d
+
+        return parse_tenor_to_days(clean)
+
     out: list[dict[str, Any]] = []
     for tr in table.find_all("tr"):
         cells = tr.find_all(["td", "th"])
@@ -1266,27 +1424,7 @@ def parse_idbi_interestrate_termdeposit_section(html: str) -> list[dict[str, Any
         if "tax saving" in tl or "vasundhara" in tl or "aarogya" in tl:
             continue
 
-        mn, mx = parse_tenor_to_days(tenor)
-        if mn is None:
-            m = re.search(r"(\d+)\s*-\s*(\d+)\s*days?", tl)
-            if m:
-                mn, mx = int(m.group(1)), int(m.group(2))
-        if mn is None:
-            m = re.search(r"(\d+)\s*days?\s*to\s*(\d+)\s*months?", tl)
-            if m:
-                mn, mx = int(m.group(1)), int(m.group(2)) * 30
-        if mn is None:
-            m = re.search(r"(\d+)\s*days?\s*to\s*<\s*(\d+)\s*year", tl)
-            if m:
-                mn, mx = int(m.group(1)), int(m.group(2)) * 365 - 1
-        if mn is None:
-            m = re.search(r">\s*(\d+)\s*year\s*to\s*(\d+)\s*years?", tl)
-            if m:
-                mn, mx = int(m.group(1)) * 365 + 1, int(m.group(2)) * 365
-        if mn is None:
-            m = re.search(r"(\d+)\s*years?\s*to\s*<\s*(\d+)\s*years?", tl)
-            if m:
-                mn, mx = int(m.group(1)) * 365, int(m.group(2)) * 365 - 1
+        mn, mx = _parse_idbi_tenor_days(tenor)
         if mn is None:
             continue
         if mx is None:
@@ -1462,58 +1600,87 @@ def parse_csb_domestic_deposits(html: str) -> list[dict[str, Any]]:
     if not anchor:
         raise ValueError("Heading h3#domestic_deposites not found (or page structure changed)")
 
-    table = anchor.find_next("table")
-    if not table:
-        raise ValueError("No <table> found after h3#domestic_deposites")
+    # There are multiple tables under this heading (savings, term, tax saver, senior).
+    # Select the domestic term-deposit table explicitly by heading text.
+    general_table = None
+    senior_table = None
+    for t in anchor.find_all_next("table", limit=12):
+        txt = t.get_text(" ", strip=True).lower()
+        if general_table is None and "domestic term deposits" in txt and "below rs. 3 crore" in txt:
+            general_table = t
+        if senior_table is None and "senior citizen term deposits" in txt and "below rs. 3 crore" in txt:
+            senior_table = t
+        if general_table is not None and senior_table is not None:
+            break
+    if general_table is None:
+        raise ValueError("No CSB domestic term-deposit table found under domestic_deposites")
+
+    def _parse_days_for_csb_tenor(tenor_text: str) -> tuple[int | None, int | None]:
+        mn, mx = parse_tenor_to_days(tenor_text)
+        if mn is not None:
+            return mn, mx
+        tl = tenor_text.lower()
+        m = re.search(r"above\s*(\d+)\s*months?\s*to\s*(?:less than\s*)?(\d+)\s*months?", tl)
+        if m:
+            a, b = int(m.group(1)) * 30 + 1, int(m.group(2)) * 30
+            return a, b
+        m = re.search(r"above\s*(\d+)\s*months?\s*to\s*(\d+)\s*years?", tl)
+        if m:
+            a, b = int(m.group(1)) * 30 + 1, int(m.group(2)) * 365
+            return a, b
+        m = re.search(r"above\s*(\d+)\s*years?\s*to\s*(\d+)\s*years?", tl)
+        if m:
+            a, b = int(m.group(1)) * 365 + 1, int(m.group(2)) * 365
+            return a, b
+        return None, None
+
+    def _extract_rows(table: Any) -> dict[str, tuple[int, int, float]]:
+        rows: dict[str, tuple[int, int, float]] = {}
+        for tr in table.find_all("tr"):
+            cells = tr.find_all(["td", "th"])
+            if len(cells) < 2:
+                continue
+            texts = [c.get_text(" ", strip=True).replace("\xa0", " ").strip() for c in cells]
+            if not any(texts):
+                continue
+            joined = " ".join(texts).lower()
+            if "slab" in joined and "deposit tenor" in joined:
+                continue
+            if "interest rates" in joined and "term deposits" in joined:
+                continue
+
+            # CSB table shape is typically [slab, tenor, rate].
+            tenor = texts[1] if len(texts) >= 3 else texts[0]
+            if not tenor:
+                continue
+            mn, mx = _parse_days_for_csb_tenor(tenor)
+            if mn is None:
+                continue
+            if mx is None:
+                mx = mn
+
+            nums: list[float] = []
+            for c in cells[1:]:
+                v = _rate_from_cell_text(c.get_text(" ", strip=True))
+                if v is not None:
+                    nums.append(v)
+            if not nums:
+                continue
+            rows[tenor.lower()] = (mn, mx, nums[-1])
+        return rows
+
+    general_rows = _extract_rows(general_table)
+    senior_rows = _extract_rows(senior_table) if senior_table is not None else {}
 
     out: list[dict[str, Any]] = []
-    for tr in table.find_all("tr"):
-        cells = tr.find_all(["td", "th"])
-        if len(cells) < 2:
-            continue
-
-        tenor = cells[0].get_text(" ", strip=True).replace("\xa0", " ").strip()
-        if not tenor:
-            continue
-        tl = tenor.lower()
-        if "tenor" in tl or "period" in tl or "maturity" in tl:
-            continue
-        if "domestic deposits" in tl or "interest rate" in tl:
-            continue
-
-        mn, mx = parse_tenor_to_days(tenor)
-        if mn is None:
-            m = re.search(r"(\d+)\s*days?\s*to\s*(\d+)\s*days?", tl)
-            if m:
-                mn, mx = int(m.group(1)), int(m.group(2))
-        if mn is None:
-            m = re.search(r"(\d+)\s*days?\s*to\s*less than\s*(\d+)\s*year", tl)
-            if m:
-                mn, mx = int(m.group(1)), int(m.group(2)) * 365 - 1
-        if mn is None:
-            m = re.search(r"(\d+)\s*months?\s*to\s*less than\s*(\d+)\s*year", tl)
-            if m:
-                mn, mx = int(m.group(1)) * 30, int(m.group(2)) * 365 - 1
-        if mn is None:
-            continue
-        if mx is None:
-            mx = mn
-
-        nums: list[float] = []
-        for c in cells[1:]:
-            v = _rate_from_cell_text(c.get_text(" ", strip=True))
-            if v is not None:
-                nums.append(v)
-        if not nums:
-            continue
-
-        gen = nums[0]
-        sr = nums[1] if len(nums) > 1 else None
+    for tenor_key, (mn, mx, gen) in general_rows.items():
+        sr_item = senior_rows.get(tenor_key)
+        sr = sr_item[2] if sr_item is not None else None
         out.append(
             {
                 "min_days": mn,
                 "max_days": mx,
-                "tenor_label": tenor,
+                "tenor_label": tenor_key,
                 "rate_general": gen,
                 "rate_senior": sr,
             }
@@ -1597,13 +1764,11 @@ def parse_cityunion_second_customers_1(html: str) -> list[dict[str, Any]]:
 def parse_dcb_depositrates_block(html: str) -> list[dict[str, Any]]:
     """
     DCB fixed-deposit page: parse first table inside
-    div class='DepositRates_datatable-block__qGF_p' (fallback: same id).
+    div class='DepositRates_datatable-block__qGF_p'.
     """
     soup = BeautifulSoup(html, "html.parser")
     token = "DepositRates_datatable-block__qGF_p"
     root = soup.find("div", class_=lambda c: bool(c) and token in _split_html_classes(c))
-    if not root:
-        root = soup.find(id=token)
     if not root:
         raise ValueError("Element div.DepositRates_datatable-block__qGF_p not found")
     table = root.find("table")
@@ -1656,6 +1821,89 @@ def parse_dcb_depositrates_block(html: str) -> list[dict[str, Any]]:
                 "rate_senior": sr,
             }
         )
+    return out
+
+
+def fetch_parse_dcb_via_api(base_url: str) -> list[dict[str, Any]]:
+    """
+    DCB rates page is client-rendered; fetch structured data from the site's
+    internal API interceptor and parse the resident fixed-deposit table.
+    """
+    m = re.match(r"^(https?://[^/]+)", (base_url or "").strip())
+    if not m:
+        raise ValueError("Invalid DCB base URL")
+    origin = m.group(1)
+
+    sess = _session()
+    payload = {"url": "/rates?id=resident-fixed-deposit-interest-rates", "method": "GET"}
+    r = sess.post(f"{origin}/api/api-interceptor", json=payload, timeout=REQUEST_TIMEOUT)
+    r.raise_for_status()
+    obj = r.json()
+
+    blocks = (((obj.get("data") or {}).get("data")) or [])
+    if not blocks:
+        raise ValueError("DCB API returned empty data for resident-fixed-deposit-interest-rates")
+
+    details_html = ""
+    for item in blocks[0].get("rate_details") or []:
+        title = str(item.get("title") or "").lower()
+        if "resident indian fixed deposit interest rates" in title:
+            details_html = str(item.get("details") or "")
+            break
+    if not details_html:
+        details_html = str((blocks[0].get("rate_details") or [{}])[0].get("details") or "")
+    if not details_html.strip():
+        raise ValueError("DCB API response missing rate_details HTML")
+
+    soup = BeautifulSoup(details_html, "html.parser")
+    table = soup.find("table")
+    if not table:
+        raise ValueError("No table found inside DCB API rate_details HTML")
+
+    out: list[dict[str, Any]] = []
+    for tr in table.find_all("tr"):
+        cells = tr.find_all(["td", "th"])
+        if len(cells) < 2:
+            continue
+        tenor = cells[0].get_text(" ", strip=True).replace("\xa0", " ").strip()
+        if not tenor:
+            continue
+        tl = tenor.lower()
+        if "tenure" in tl or "deposit interest rate" in tl or "general" in tl or "senior" in tl:
+            continue
+
+        mn, mx = parse_tenor_to_days(tenor)
+        if mn is None:
+            m1 = re.search(r"(\d+)\s*days?\s*to\s*(\d+)\s*days?", tl)
+            if m1:
+                mn, mx = int(m1.group(1)), int(m1.group(2))
+        if mn is None:
+            continue
+        if mx is None:
+            mx = mn
+
+        nums: list[float] = []
+        for c in cells[1:]:
+            v = _rate_from_cell_text(c.get_text(" ", strip=True))
+            if v is not None:
+                nums.append(v)
+        if not nums:
+            continue
+
+        gen = nums[0]
+        # DCB resident table is usually: general_rate, general_yield, senior_rate, ...
+        sr = nums[2] if len(nums) >= 3 else (nums[1] if len(nums) >= 2 else None)
+        out.append(
+            {
+                "min_days": mn,
+                "max_days": mx,
+                "tenor_label": tenor,
+                "rate_general": gen,
+                "rate_senior": sr,
+            }
+        )
+    if not out:
+        raise ValueError("DCB API table parsed but yielded zero rows")
     return out
 
 
@@ -1732,6 +1980,12 @@ def parse_yes_first_table(html: str) -> list[dict[str, Any]]:
     """
     YES Bank fixed-deposit page: parse first table.
     """
+    if "replace this template with actual page html from" in html.lower():
+        raise ValueError(
+            "YES source fallback snapshot is still a template. "
+            "Replace snapshots/yes_fd_page.html with real YES page HTML."
+        )
+
     soup = BeautifulSoup(html, "html.parser")
     table = soup.find("table")
     if not table:
@@ -1789,6 +2043,8 @@ def parse_yes_first_table(html: str) -> list[dict[str, Any]]:
                 "rate_senior": sr,
             }
         )
+    if not out:
+        raise ValueError("YES parser found no rows from available table content")
     return out
 
 
@@ -1828,15 +2084,14 @@ def fetch_and_parse(
     text: str | None = None
     fetch_error: Exception | None = None
 
-    # For heavily client-rendered pages, allow deterministic local snapshot parsing.
-    if name == "equitas_div_w_full_md_w_3_5":
-        local_html_path = str(src.get("local_html_path") or "").strip()
-        if local_html_path:
-            p = Path(local_html_path)
-            if not p.is_absolute():
-                p = (Path(__file__).resolve().parent / p).resolve()
-            if p.is_file():
-                text = p.read_text(encoding="utf-8", errors="ignore")
+    # If a local snapshot is configured, prefer it first for deterministic parsing.
+    local_html_path = str(src.get("local_html_path") or "").strip()
+    if local_html_path:
+        p = Path(local_html_path)
+        if not p.is_absolute():
+            p = (Path(__file__).resolve().parent / p).resolve()
+        if p.is_file():
+            text = p.read_text(encoding="utf-8", errors="ignore")
 
     if url and text is None:
         try:
@@ -1855,6 +2110,10 @@ def fetch_and_parse(
                 p = (Path(__file__).resolve().parent / p).resolve()
             if p.is_file():
                 text = p.read_text(encoding="utf-8", errors="ignore")
+            else:
+                raise ValueError(
+                    f"Live page is blocked/challenge page and local_html_path not found: {p}"
+                )
 
     if text is None:
         local_html_path = str(src.get("local_html_path") or "").strip()
@@ -1881,6 +2140,27 @@ def fetch_and_parse(
 
     if name == "html_div_class_fd_table":
         return parse_html_div_class_fd_table(text, container_class or "")
+
+    if name == "equitas_div_w_full_md_w_3_5":
+        try:
+            return parse_equitas_div_w_full_md_w_3_5(text)
+        except Exception as html_err:
+            pdf_url = _extract_equitas_overall_interest_pdf_url(text)
+            if not pdf_url:
+                raise html_err
+            sess = _session()
+            r = sess.get(pdf_url, timeout=REQUEST_TIMEOUT)
+            r.raise_for_status()
+            rows = parse_equitas_overall_interest_pdf(r.content)
+            if not rows:
+                raise ValueError("Equitas PDF parsed but produced no rows") from html_err
+            return rows
+
+    if name == "dcb_depositrates_block":
+        try:
+            return fetch_parse_dcb_via_api(url)
+        except Exception:
+            return parse_dcb_depositrates_block(text)
 
     if name == "idfc_fd_formtable":
         if "senior_extra_pct" in src:
